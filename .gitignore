@@ -4,6 +4,7 @@ webrtc-backend
 # Environment
 .env
 .env.*
+!.env.example
 
 # IDE
 .idea/
