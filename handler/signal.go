@@ -106,6 +106,8 @@ func (c *Client) readPump() {
 			handleLeave(c)
 		case "offer", "answer", "ice-candidate":
 			handleRelay(c, msg)
+		case "screen-share-start", "screen-share-stop":
+			handleScreenShareBroadcast(c, msg)
 		default:
 			sendError(c, "unknown message type: "+msg.Type)
 		}
@@ -224,6 +226,26 @@ func handleRelay(c *Client, msg SignalMessage) {
 	}
 	if !room.SendTo(msg.TargetID, data) {
 		sendError(c, "target peer not found")
+	}
+}
+
+func handleScreenShareBroadcast(c *Client, msg SignalMessage) {
+	if c.RoomID == "" {
+		sendError(c, "not in a room")
+		return
+	}
+
+	data, err := json.Marshal(SignalMessage{
+		Type:   msg.Type,
+		PeerID: c.ID,
+	})
+	if err != nil {
+		return
+	}
+
+	room := manager.GetRoom(c.RoomID)
+	if room != nil {
+		room.Broadcast(data, c.ID)
 	}
 }
 
