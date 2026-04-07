@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"voice-video-server/db"
 	"voice-video-server/handler"
@@ -26,7 +27,14 @@ func main() {
 
 	r := router.NewRouter()
 	r.Use(middleware.Logger)
-	r.Use(middleware.SimpleCORS())
+
+	allowedCORS := os.Getenv("ALLOWED_CORS")
+	if allowedCORS != "" {
+		origins := strings.Split(allowedCORS, ",")
+		r.Use(middleware.StrictCORS(origins))
+	} else {
+		r.Use(middleware.SimpleCORS())
+	}
 
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
