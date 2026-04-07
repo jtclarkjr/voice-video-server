@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: webrtc
+      POSTGRES_PASSWORD: webrtc
+      POSTGRES_DB: webrtc
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webrtc"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  webrtc-server:
+    build: .
+    ports:
+      - "8080:8080"
+      - "50000-50060:50000-50060/udp"
+    environment:
+      DATABASE_URL: postgres://webrtc:webrtc@db:5432/webrtc?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
