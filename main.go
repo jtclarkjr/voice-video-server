@@ -26,7 +26,7 @@ func main() {
 	}
 
 	r := router.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{IncludeTimestamp: false}))
 
 	allowedCORS := os.Getenv("ALLOWED_CORS")
 	if allowedCORS != "" {
