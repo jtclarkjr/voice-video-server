@@ -51,6 +51,6 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("WebRTC signaling server listening on :%s", port)
+	log.Printf("Server listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }
