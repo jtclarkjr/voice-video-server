@@ -37,3 +37,5 @@ require (
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 )
+
+replace github.com/jtclarkjr/router-go => /Users/jamesclark/github/router-go
