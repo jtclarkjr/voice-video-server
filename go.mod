@@ -6,7 +6,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/joho/godotenv v1.5.1
-	github.com/jtclarkjr/router-go v0.6.3
+	github.com/jtclarkjr/router-go v0.6.4
 	github.com/pion/randutil v0.1.0
 	github.com/pion/webrtc/v4 v4.0.0
 )
