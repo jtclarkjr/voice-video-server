@@ -2,6 +2,10 @@ FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
+ENV GONOSUMDB=github.com/jtclarkjr/router-go
+ENV GONOSUMCHECK=github.com/jtclarkjr/router-go
+ENV GOPROXY=direct
+
 COPY go.mod go.sum ./
 RUN go mod download
 
