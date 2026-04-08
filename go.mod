@@ -6,7 +6,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/joho/godotenv v1.5.1
-	github.com/jtclarkjr/router-go v0.6.2
+	github.com/jtclarkjr/router-go v0.6.3
 	github.com/pion/randutil v0.1.0
 	github.com/pion/webrtc/v4 v4.0.0
 )
@@ -37,5 +37,3 @@ require (
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 )
-
-replace github.com/jtclarkjr/router-go => /Users/jamesclark/github/router-go
