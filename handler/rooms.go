@@ -28,7 +28,9 @@ func HandleRoomEvents(w http.ResponseWriter, r *http.Request) {
 	// Send current state immediately.
 	initial := manager.ListRooms()
 	data, _ := json.Marshal(initial)
-	fmt.Fprintf(w, "data: %s\n\n", data)
+	if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+		return
+	}
 	flusher.Flush()
 
 	ch := manager.Subscribe()
@@ -43,7 +45,9 @@ func HandleRoomEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			data, _ := json.Marshal(rooms)
-			fmt.Fprintf(w, "data: %s\n\n", data)
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+				return
+			}
 			flusher.Flush()
 		}
 	}

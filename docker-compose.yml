@@ -22,8 +22,13 @@ services:
     ports:
       - "8080:8080"
       - "50000-50060:50000-50060/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: postgres://webrtc:webrtc@db:5432/webrtc?sslmode=disable
+      SUPABASE_URL: ${SUPABASE_URL_DOCKER:-http://host.docker.internal:54321}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
+      ALLOWED_CORS: ${ALLOWED_CORS:-http://localhost:3000}
     depends_on:
       db:
         condition: service_healthy

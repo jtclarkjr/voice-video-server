@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"voice-video-server/db"
@@ -19,17 +20,20 @@ var upgrader = websocket.Upgrader{
 
 // SignalMessage is the envelope for all signaling messages.
 type SignalMessage struct {
-	Type        string          `json:"type"`
-	RoomID      string          `json:"roomId,omitempty"`
-	DisplayName string          `json:"displayName,omitempty"`
-	TargetID    string          `json:"targetId,omitempty"`
-	FromID      string          `json:"fromId,omitempty"`
-	SDP         json.RawMessage `json:"sdp,omitempty"`
-	Candidate   json.RawMessage `json:"candidate,omitempty"`
-	Peers       []PeerInfo      `json:"peers,omitempty"`
-	UserID      string          `json:"userId,omitempty"`
-	PeerID      string          `json:"peerId,omitempty"`
-	Message     string          `json:"message,omitempty"`
+	Type         string          `json:"type"`
+	RoomID       string          `json:"roomId,omitempty"`
+	DisplayName  string          `json:"displayName,omitempty"`
+	AuthToken    string          `json:"authToken,omitempty"`
+	AudioEnabled *bool           `json:"audioEnabled,omitempty"`
+	VideoEnabled *bool           `json:"videoEnabled,omitempty"`
+	TargetID     string          `json:"targetId,omitempty"`
+	FromID       string          `json:"fromId,omitempty"`
+	SDP          json.RawMessage `json:"sdp,omitempty"`
+	Candidate    json.RawMessage `json:"candidate,omitempty"`
+	Peers        []PeerInfo      `json:"peers,omitempty"`
+	UserID       string          `json:"userId,omitempty"`
+	PeerID       string          `json:"peerId,omitempty"`
+	Message      string          `json:"message,omitempty"`
 }
 
 const (
@@ -74,7 +78,9 @@ func (c *Client) readPump() {
 				}(c.RoomID)
 			}
 		}
-		c.Conn.Close()
+		if err := c.Conn.Close(); err != nil {
+			log.Printf("failed to close websocket connection for client %s: %v", c.ID, err)
+		}
 	}()
 
 	if err := c.Conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
@@ -104,6 +110,8 @@ func (c *Client) readPump() {
 			handleJoin(c, msg)
 		case "leave":
 			handleLeave(c)
+		case "media-state":
+			handleMediaState(c, msg)
 		case "offer", "answer", "ice-candidate":
 			handleRelay(c, msg)
 		case "screen-share-start", "screen-share-stop":
@@ -118,7 +126,9 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.Conn.Close()
+		if err := c.Conn.Close(); err != nil {
+			log.Printf("failed to close websocket connection for client %s: %v", c.ID, err)
+		}
 	}()
 
 	for {
@@ -151,11 +161,32 @@ func handleJoin(c *Client, msg SignalMessage) {
 		return
 	}
 
-	c.DisplayName = msg.DisplayName
-	if c.DisplayName == "" {
-		c.DisplayName = "Anonymous"
+	roomExists := manager.GetRoom(msg.RoomID) != nil
+
+	authUser, err := validateSupabaseAccessToken(context.Background(), msg.AuthToken)
+	if err != nil {
+		log.Printf("Supabase auth validation failed for room %q: %v", msg.RoomID, err)
+		sendError(c, "authentication failed")
+		return
 	}
+
+	if !roomExists && (authUser == nil || authUser.IsAnonymous) {
+		sendError(c, "sign in required to create room")
+		return
+	}
+
+	displayName := strings.TrimSpace(msg.DisplayName)
+	if authUser != nil && !authUser.IsAnonymous {
+		displayName = authUser.DisplayName
+	}
+	if displayName == "" {
+		displayName = anonymousDisplayName
+	}
+
+	c.DisplayName = displayName
 	c.RoomID = msg.RoomID
+	c.AudioEnabled = msg.AudioEnabled == nil || *msg.AudioEnabled
+	c.VideoEnabled = msg.VideoEnabled == nil || *msg.VideoEnabled
 
 	room := manager.GetOrCreateRoom(msg.RoomID)
 	peers := room.GetPeerList(c.ID)
@@ -171,9 +202,11 @@ func handleJoin(c *Client, msg SignalMessage) {
 
 	// Broadcast peer-joined to existing clients
 	broadcast, _ := json.Marshal(SignalMessage{
-		Type:        "peer-joined",
-		PeerID:      c.ID,
-		DisplayName: c.DisplayName,
+		Type:         "peer-joined",
+		PeerID:       c.ID,
+		DisplayName:  c.DisplayName,
+		AudioEnabled: &c.AudioEnabled,
+		VideoEnabled: &c.VideoEnabled,
 	})
 	room.Broadcast(broadcast, c.ID)
 
@@ -247,6 +280,38 @@ func handleScreenShareBroadcast(c *Client, msg SignalMessage) {
 	if room != nil {
 		room.Broadcast(data, c.ID)
 	}
+}
+
+func handleMediaState(c *Client, msg SignalMessage) {
+	if c.RoomID == "" {
+		sendError(c, "not in a room")
+		return
+	}
+
+	if msg.AudioEnabled != nil {
+		c.AudioEnabled = *msg.AudioEnabled
+	}
+	if msg.VideoEnabled != nil {
+		c.VideoEnabled = *msg.VideoEnabled
+	}
+
+	room := manager.GetRoom(c.RoomID)
+	if room == nil {
+		sendError(c, "room not found")
+		return
+	}
+
+	data, err := json.Marshal(SignalMessage{
+		Type:         "media-state",
+		PeerID:       c.ID,
+		AudioEnabled: &c.AudioEnabled,
+		VideoEnabled: &c.VideoEnabled,
+	})
+	if err != nil {
+		return
+	}
+
+	room.Broadcast(data, c.ID)
 }
 
 func broadcastPeerLeft(c *Client) {

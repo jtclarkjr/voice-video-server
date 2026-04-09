@@ -8,17 +8,21 @@ import (
 
 // Client represents a connected WebSocket client in a room.
 type Client struct {
-	ID          string
-	DisplayName string
-	RoomID      string
-	Conn        *websocket.Conn
-	Send        chan []byte
+	ID           string
+	DisplayName  string
+	RoomID       string
+	AudioEnabled bool
+	VideoEnabled bool
+	Conn         *websocket.Conn
+	Send         chan []byte
 }
 
 // PeerInfo is the public view of a client sent in signaling messages.
 type PeerInfo struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"displayName"`
+	ID           string `json:"id"`
+	DisplayName  string `json:"displayName"`
+	AudioEnabled bool   `json:"audioEnabled"`
+	VideoEnabled bool   `json:"videoEnabled"`
 }
 
 // Room holds the set of clients in a single call room.
@@ -189,8 +193,10 @@ func (r *Room) GetPeerList(excludeID string) []PeerInfo {
 			continue
 		}
 		peers = append(peers, PeerInfo{
-			ID:          client.ID,
-			DisplayName: client.DisplayName,
+			ID:           client.ID,
+			DisplayName:  client.DisplayName,
+			AudioEnabled: client.AudioEnabled,
+			VideoEnabled: client.VideoEnabled,
 		})
 	}
 	return peers

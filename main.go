@@ -28,7 +28,11 @@ func main() {
 	}
 
 	r := router.NewRouter()
-	r.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{IncludeTimestamp: false, Output: os.Stdout}))
+	r.Use(middleware.LoggerWithConfig(
+		middleware.LoggerConfig{
+			IncludeTimestamp: false, Output: os.Stdout,
+		},
+	))
 
 	allowedCORS := os.Getenv("ALLOWED_CORS")
 	if allowedCORS != "" {
@@ -41,11 +45,19 @@ func main() {
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	r.Post("/offer", handler.HandleOffer)
-	r.Post("/media", handler.HandleMedia)
+
 	r.Get("/rooms", handler.HandleListRooms)
 	r.Get("/rooms/events", handler.HandleRoomEvents)
 	r.Get("/ws", handler.HandleSignal)
+
+	if handler.SupabaseAuthConfigured() {
+		r.Use(handler.RequireSupabaseAuth())
+	} else {
+		log.Println("SUPABASE auth not configured, protected route middleware disabled")
+	}
+
+	r.Post("/offer", handler.HandleOffer)
+	r.Post("/media", handler.HandleMedia)
 
 	port := os.Getenv("PORT")
 	if port == "" {
