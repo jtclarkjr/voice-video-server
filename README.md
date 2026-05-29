@@ -23,8 +23,8 @@ Supabase auth, and OpenAI Realtime translation.
 ## Getting Started
 
 ```bash
-git clone https://github.com/jtclarkjr/webrtc-app.git
-cd webrtc-app/webrtc-backend
+git clone https://github.com/jtclarkjr/voice-video-server.git
+cd voice-video-server
 go mod tidy
 go run .
 ```
