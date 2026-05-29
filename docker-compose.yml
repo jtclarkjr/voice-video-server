@@ -28,7 +28,7 @@ services:
       DATABASE_URL: postgres://webrtc:webrtc@db:5432/webrtc?sslmode=disable
       SUPABASE_URL: ${SUPABASE_URL_DOCKER:-http://host.docker.internal:54321}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
-      ALLOWED_CORS: ${ALLOWED_CORS:-http://localhost:3000}
+      ALLOWED_CORS: ${ALLOWED_CORS:-http://localhost:3000,http://localhost:5173}
     depends_on:
       db:
         condition: service_healthy
