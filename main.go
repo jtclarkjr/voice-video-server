@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -75,8 +76,10 @@ func main() {
 
 	r.Post("/offer", handler.HandleOffer)
 	r.Post("/media", handler.HandleMedia)
+	r.Post("/translation/client-secret", handler.HandleTranslationClientSecret)
 	r.Options("/offer", handleOptions)
 	r.Options("/media", handleOptions)
+	r.Options("/translation/client-secret", handleOptions)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -89,16 +92,49 @@ func main() {
 func parseAllowedOrigins(raw string) []string {
 	parts := strings.Split(raw, ",")
 	origins := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
 
 	for _, part := range parts {
 		origin := strings.TrimSpace(part)
 		if origin == "" {
 			continue
 		}
-		origins = append(origins, origin)
+		for _, allowedOrigin := range expandLocalOrigin(origin) {
+			if _, ok := seen[allowedOrigin]; ok {
+				continue
+			}
+			seen[allowedOrigin] = struct{}{}
+			origins = append(origins, allowedOrigin)
+		}
 	}
 
 	return origins
+}
+
+func expandLocalOrigin(origin string) []string {
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return []string{origin}
+	}
+
+	switch parsed.Hostname() {
+	case "localhost":
+		localhostOrigin := *parsed
+		localhostOrigin.Host = "127.0.0.1"
+		if port := parsed.Port(); port != "" {
+			localhostOrigin.Host += ":" + port
+		}
+		return []string{origin, localhostOrigin.String()}
+	case "127.0.0.1":
+		loopbackOrigin := *parsed
+		loopbackOrigin.Host = "localhost"
+		if port := parsed.Port(); port != "" {
+			loopbackOrigin.Host += ":" + port
+		}
+		return []string{origin, loopbackOrigin.String()}
+	default:
+		return []string{origin}
+	}
 }
 
 func handleOptions(w http.ResponseWriter, _ *http.Request) {
