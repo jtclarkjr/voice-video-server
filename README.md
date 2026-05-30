@@ -10,8 +10,8 @@ Supabase auth, and OpenAI Realtime translation.
 - **Audio/Video Mirror** — stream audio and video tracks to the server, receive them looped back in real time
 - **Room Signaling** — create/list rooms, receive room events, and connect peers through WebSocket signaling
 - **Single HTTP Signaling** — full SDP offer/answer exchange for `/offer` and `/media` in one POST request
-- **Live Translation Session Secrets** — authenticated users can request short-lived OpenAI Realtime
-  translation client secrets for the frontend `/translate` flow
+- **Backend-Managed Live Translation Sessions** — authenticated users create persisted translation
+  sessions, send SDP offers to the backend, and receive SDP answers without exposing OpenAI tokens
 
 ## Requirements
 
@@ -38,16 +38,16 @@ Copy `.env.example` to `.env` for local development and set the values needed by
 | Variable | Purpose |
 | --- | --- |
 | `PORT` | HTTP listen port. Defaults to `8080`. |
-| `DATABASE_URL` | Optional Postgres connection string for room storage. The server keeps running without it. |
+| `DATABASE_URL` | Postgres connection string. Optional for room storage, required for backend-managed translation sessions. |
 | `ALLOWED_CORS` | Comma-separated frontend origins allowed by CORS. Include deployed origins such as `https://video-voice-app-v2.vercel.app`. |
 | `SUPABASE_URL` | Supabase project URL used to validate authenticated requests. |
 | `SUPABASE_URL_DOCKER` | Docker-only Supabase URL override, usually `http://host.docker.internal:54321` for local Supabase. |
 | `SUPABASE_SECRET_KEY` | Supabase service role or secret key used by backend auth validation. |
-| `OPENAI_API_KEY` | Server-side OpenAI API key used to create Realtime translation client secrets. |
+| `OPENAI_API_KEY` | Server-side OpenAI API key used to create Realtime translation calls. |
 
-The live translation endpoint is protected when Supabase auth is configured. It returns `401` for
-missing/anonymous users, `503` when `OPENAI_API_KEY` is not set, and sanitized `502` responses for
-OpenAI upstream failures.
+The live translation endpoints are protected when Supabase auth is configured. They return `401`
+for missing/anonymous users, `503` when `OPENAI_API_KEY` or the translation session store is not
+available, and sanitized `502` responses for OpenAI upstream failures.
 
 ## Docker
 
@@ -104,26 +104,41 @@ curl -X POST http://localhost:8080/media \
   -d '{"type":"offer","sdp":"..."}'
 ```
 
-### POST /translation/client-secret
+### POST /translation/sessions
 
-Create a short-lived OpenAI Realtime translation client secret for an authenticated, non-anonymous
-Supabase user. The frontend uses this secret to open a browser WebRTC translation session directly
-with OpenAI.
+Create a backend-owned translation session for an authenticated, non-anonymous Supabase user.
 
-Request body:
+Query parameters:
+
+```text
+lang=ja
+```
+
+Supported target languages are `en`, `es`, `pt`, `fr`, `ja`, `ru`, `zh`, `de`, `ko`, `hi`, `id`,
+`vi`, and `it`.
+
+Response body:
 
 ```json
 {
-  "targetLanguage": "ja"
+  "id": "session-id",
+  "expiresAt": "2026-05-30T12:10:00Z"
 }
 ```
 
-Supported target languages are `en`, `es`, `fr`, `de`, `it`, `pt`, `ja`, `ko`, `zh`, `ar`, and
-`hi`.
+### POST /translation/sessions/{id}/offer
+
+Exchange a browser SDP offer for an OpenAI SDP answer. The request body must be raw SDP with
+`Content-Type: application/sdp`; the response body is raw SDP with `Content-Type: application/sdp`.
+
+### DELETE /translation/sessions/{id}
+
+Mark the backend-owned translation session ended. This is local cleanup only; the browser still ends
+the live media session by closing its `RTCPeerConnection`.
 
 The backend calls OpenAI with model `gpt-realtime-translate`, sets `audio.output.language` to the
-requested target language, and sends `OpenAI-Safety-Identifier` as a SHA-256 hash of the Supabase
-user ID. The OpenAI API key never leaves the backend.
+requested `lang`, sends `OpenAI-Safety-Identifier` as a SHA-256 hash of the Supabase user ID, and
+keeps the OpenAI API key and OpenAI tokens off the frontend.
 
 ## Testing Locally
 

@@ -76,10 +76,14 @@ func main() {
 
 	r.Post("/offer", handler.HandleOffer)
 	r.Post("/media", handler.HandleMedia)
-	r.Post("/translation/client-secret", handler.HandleTranslationClientSecret)
+	r.Post("/translation/sessions", handler.HandleCreateTranslationSession)
+	r.Post("/translation/sessions/{id}/offer", handler.HandleTranslationSessionOffer)
+	r.Delete("/translation/sessions/{id}", handler.HandleDeleteTranslationSession)
 	r.Options("/offer", handleOptions)
 	r.Options("/media", handleOptions)
-	r.Options("/translation/client-secret", handleOptions)
+	r.Options("/translation/sessions", handleOptions)
+	r.Options("/translation/sessions/{id}/offer", handleOptions)
+	r.Options("/translation/sessions/{id}", handleOptions)
 
 	port := os.Getenv("PORT")
 	if port == "" {

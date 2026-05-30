@@ -3,6 +3,8 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type User struct {
@@ -23,6 +25,24 @@ type RoomParticipant struct {
 	UserID   string     `json:"userId"`
 	JoinedAt time.Time  `json:"joinedAt"`
 	LeftAt   *time.Time `json:"leftAt,omitempty"`
+}
+
+const (
+	TranslationSessionStatusPending   = "pending"
+	TranslationSessionStatusConnected = "connected"
+	TranslationSessionStatusFailed    = "failed"
+	TranslationSessionStatusEnded     = "ended"
+)
+
+type TranslationSession struct {
+	ID             string     `json:"id"`
+	SupabaseUserID string     `json:"supabaseUserId"`
+	Lang           string     `json:"lang"`
+	Status         string     `json:"status"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	ExpiresAt      time.Time  `json:"expiresAt"`
+	ConnectedAt    *time.Time `json:"connectedAt,omitempty"`
+	EndedAt        *time.Time `json:"endedAt,omitempty"`
 }
 
 // CreateUser inserts a new user and returns it.
@@ -107,4 +127,100 @@ func GetActiveParticipants(ctx context.Context, roomID string) ([]User, error) {
 		users = append(users, u)
 	}
 	return users, rows.Err()
+}
+
+func CreateTranslationSession(ctx context.Context, userID, lang string, expiresAt time.Time) (TranslationSession, error) {
+	var s TranslationSession
+	err := Pool.QueryRow(ctx,
+		`INSERT INTO translation_sessions (supabase_user_id, lang, expires_at)
+		 VALUES ($1, $2, $3)
+		 RETURNING id, supabase_user_id, lang, status, created_at, expires_at, connected_at, ended_at`,
+		userID,
+		lang,
+		expiresAt,
+	).Scan(
+		&s.ID,
+		&s.SupabaseUserID,
+		&s.Lang,
+		&s.Status,
+		&s.CreatedAt,
+		&s.ExpiresAt,
+		&s.ConnectedAt,
+		&s.EndedAt,
+	)
+	return s, err
+}
+
+func GetTranslationSessionForUser(ctx context.Context, id, userID string) (TranslationSession, error) {
+	var s TranslationSession
+	err := Pool.QueryRow(ctx,
+		`SELECT id, supabase_user_id, lang, status, created_at, expires_at, connected_at, ended_at
+		 FROM translation_sessions
+		 WHERE id = $1 AND supabase_user_id = $2`,
+		id,
+		userID,
+	).Scan(
+		&s.ID,
+		&s.SupabaseUserID,
+		&s.Lang,
+		&s.Status,
+		&s.CreatedAt,
+		&s.ExpiresAt,
+		&s.ConnectedAt,
+		&s.EndedAt,
+	)
+	return s, err
+}
+
+func MarkTranslationSessionConnected(ctx context.Context, id string) error {
+	tag, err := Pool.Exec(ctx,
+		`UPDATE translation_sessions
+		 SET status = $2, connected_at = COALESCE(connected_at, now())
+		 WHERE id = $1 AND status = $3`,
+		id,
+		TranslationSessionStatusConnected,
+		TranslationSessionStatusPending,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+func MarkTranslationSessionFailed(ctx context.Context, id string) error {
+	tag, err := Pool.Exec(ctx,
+		`UPDATE translation_sessions
+		 SET status = $2, ended_at = COALESCE(ended_at, now())
+		 WHERE id = $1`,
+		id,
+		TranslationSessionStatusFailed,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+func MarkTranslationSessionEndedForUser(ctx context.Context, id, userID string) error {
+	tag, err := Pool.Exec(ctx,
+		`UPDATE translation_sessions
+		 SET status = $3, ended_at = COALESCE(ended_at, now())
+		 WHERE id = $1 AND supabase_user_id = $2`,
+		id,
+		userID,
+		TranslationSessionStatusEnded,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
